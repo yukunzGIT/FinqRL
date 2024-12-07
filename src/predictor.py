@@ -9,6 +9,10 @@ import tqdm
 import trainer
 import reward
 import util
+import pandas as pd
+from rouge_score import rouge_scorer
+from bert_score import score as bert_score
+import sacrebleu
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -55,6 +59,63 @@ def run(bertnlp, agent, texts):
             max_crr_item = i
 
     return [max_crr_item.comp_sent]
+
+# Metrics Calculation Functions
+def compute_rouge(hypotheses, references):
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    rouge1, rouge2, rougeL = [], [], []
+    for hyp, ref in zip(hypotheses, references):
+        scores = scorer.score(ref, hyp)
+        rouge1.append(scores['rouge1'].fmeasure)
+        rouge2.append(scores['rouge2'].fmeasure)
+        rougeL.append(scores['rougeL'].fmeasure)
+    return (
+        sum(rouge1) / len(rouge1) * 100,
+        sum(rouge2) / len(rouge2) * 100,
+        sum(rougeL) / len(rougeL) * 100,
+    )
+
+def compute_bleu(hypotheses, references):
+    references = [[ref] for ref in references]  # SacreBLEU expects list of lists
+    bleu = sacrebleu.corpus_bleu(hypotheses, references)
+    return bleu.score
+
+def compute_bertscore(hypotheses, references, model_type="bert-base-uncased"):
+    P, R, F1 = bert_score(hypotheses, references, model_type=model_type, verbose=False)
+    return float(F1.mean()) * 100
+
+def compute_avgtr(hypotheses, inputs):
+    ratios = [len(hyp.split()) / len(inp.split()) for hyp, inp in zip(hypotheses, inputs)]
+    return sum(ratios) / len(ratios)
+
+# Evaluation function
+def evaluate(opt, dataset_file, reference_file):
+    # Load data
+    with open(dataset_file, "r") as f:
+        inputs = [line.strip() for line in f.readlines()]
+
+    references = pd.read_csv(reference_file)["summary_gemini-1.0-pro"].tolist()
+
+    # Initialize model and generate summaries
+    bertnlp, agent, _ = init(opt)
+    print("Generating summaries...")
+    hypotheses = run(bertnlp, agent, inputs)
+
+    # Calculate metrics
+    print("Calculating metrics...")
+    rouge1, rouge2, rougeL = compute_rouge(hypotheses, references)
+    bleu = compute_bleu(hypotheses, references)
+    bertscore = compute_bertscore(hypotheses, references)
+    avgtr = compute_avgtr(hypotheses, inputs)
+
+    # Print results
+    print(f"ROUGE-1: {rouge1:.2f}%")
+    print(f"ROUGE-2: {rouge2:.2f}%")
+    print(f"ROUGE-L: {rougeL:.2f}%")
+    print(f"BLEU: {bleu:.2f}")
+    print(f"BERTScore (F1): {bertscore:.2f}%")
+    print(f"AvgTR: {avgtr:.4f}")
+
 
 
 if __name__ == "__main__":

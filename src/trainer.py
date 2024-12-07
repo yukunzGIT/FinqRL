@@ -21,7 +21,13 @@ import matplotlib.pyplot as plt
 #all_rewards = []
 all_rewards_ = []
 
-
+MODELS = {
+    "bert-base-uncased": ("bert-base-uncased", BertTokenizer, BertModel),
+    "secbert-base": ("nlpaueb/sec-bert-base", AutoTokenizer, AutoModel),
+    "finbert-base": ("ProsusAI/finbert", AutoTokenizer, AutoModel),
+    "roberta-base": ("roberta-base", RobertaTokenizer, RobertaModel),
+    "spanbert-base": ("SpanBERT/spanbert-base-cased", AutoTokenizer, AutoModel),
+}
 
 logger = None
 
@@ -42,7 +48,8 @@ def train(opt):
         json.dump(vars(opt), f) # Saves the training configuration (opt) as a JSON file to CONFIG_FILE.
 
     # Initializes the BERT-based NLP model, loading pre-trained weights.
-    bertnlp.init() # NOTE
+    model_name = MODELS[0]
+    bertnlp.init(model_name) # NOTE
 
     # Agent and Data Initialization
     agent = dqn.EditorialAgent(layer_num=opt.nlayer, hidden_dim=opt.hdim) # NOTE
@@ -193,7 +200,7 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser("Training script", add_help=True)
 
     args.add_argument("-t", help="Training Corpus", required=True, type=str)
-    args.add_argument("-e", help="Epoch", default=10, type=int) # default=10000000000000
+    args.add_argument("-e", help="Epoch", default=5000, type=int) # default=10000000000000
     args.add_argument("-min_cr", help="Minimum threshold for compression",
                       default=0.3, type=float)
     args.add_argument("-min_rr", help="Minimum threshold for reconstruction",
@@ -234,13 +241,19 @@ if __name__ == "__main__":
     # After training is completed, plot the curves
     plt.figure()
     #plt.plot(all_rewards, label='Reward')
-    plt.plot(all_rewards_, label='Reward_')
+    #plt.plot(all_rewards_, label='Reward_', color='orange')
+    plt.plot(train_iterations, cumulative_rewards, marker='o', linestyle='-', label="Cumulative Reward", color='orange')
     plt.xlabel('Training Iterations')
-    plt.ylabel('Reward')
-    plt.title('Learning Curves')
+    plt.ylabel('Cumulative Reward')
+    plt.title('Cumulative Reward Over Train Iterations')
     plt.legend()
+    plt.grid()
 
-    plt.savefig('learning_curves.png')
+    # Set x-axis ticks every 100 iterations
+    tick_step=100
+    plt.xticks(range(0, len(all_rewards_), tick_step))
+
+    plt.savefig('cumulative_learning_curves.png')
     plt.show()
 
     

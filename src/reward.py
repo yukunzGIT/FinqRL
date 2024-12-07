@@ -1,6 +1,8 @@
 import os
 import numpy as np
 from dqn import EditorialAgent
+from rouge_score import rouge_scorer
+from transformers import AutoTokenizer, AutoModel
 
 
 recon_stopwords_file = \
@@ -8,6 +10,50 @@ recon_stopwords_file = \
 with open(recon_stopwords_file) as f:
     for l in f:
         recon_stopwords = set([l.strip() for l in f])
+
+# Utility functions for similarity and log-likelihood calculations
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased")
+
+def bert_similarity(text1, text2):
+    inputs = tokenizer(text1, text2, return_tensors="pt", truncation=True, max_length=512)
+    outputs = model(**inputs)
+    embeddings = outputs.last_hidden_state.mean(dim=1)
+    sim = torch.nn.functional.cosine_similarity(embeddings[0], embeddings[1], dim=0)
+    return sim.item()
+
+def rouge_l_score(reference, prediction):
+    scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
+    scores = scorer.score(reference, prediction)
+    return scores["rougeL"].fmeasure
+
+def log_likelihood(sentence):
+    inputs = tokenizer(sentence, return_tensors="pt", truncation=True, max_length=512)
+    outputs = model(**inputs, labels=inputs["input_ids"])
+    return -outputs.loss.item()  # Negative log-likelihood
+
+# Full reward function
+def calculate_full_reward(item, s1=0.1, s2=0.1, r=0.1, l=0.1):
+    T = len(item.predictions)
+    N = len(item.original)
+
+    compression_ratio = get_compression_ratio(item)
+    reconstruction_ratio = get_reconstruction_ratio(item)
+    sim_xy = bert_similarity(item.original_text, item.predicted_text)
+    sim_xhatx = bert_similarity(item.original_text, item.reconstructed_text)
+    rouge_l = rouge_l_score(item.original_text, item.predicted_text)
+    log_likelihood_value = log_likelihood(item.predicted_text)
+
+    reward = (T / N) * (
+        compression_ratio * reconstruction_ratio +
+        s1 * sim_xy +
+        s2 * sim_xhatx +
+        r * rouge_l +
+        l * log_likelihood_value
+    )
+    return reward
+
+
 
 
 def get_compression_ratio(item):

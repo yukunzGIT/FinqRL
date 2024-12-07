@@ -15,8 +15,16 @@ MAX_LENGTH = 512
 
 config, tokenizer, model, sim_model = None, None, None, None
 
+# Supported Models
+MODELS = {
+    "bert-base-uncased": ("bert-base-uncased", BertTokenizer, BertModel),
+    "secbert-base": ("nlpaueb/sec-bert-base", AutoTokenizer, AutoModel),
+    "finbert-base": ("ProsusAI/finbert", AutoTokenizer, AutoModel),
+    "roberta-base": ("roberta-base", RobertaTokenizer, RobertaModel),
+    "spanbert-base": ("SpanBERT/spanbert-base-cased", AutoTokenizer, AutoModel),
+}
 
-def init(maxlen=512): # maximum input length of 512 tokens.
+def init(model_name, maxlen=512): # maximum input length of 512 tokens.
     # Initializes the BERT model, tokenizer, and configurations, setting up global variables for processing.
     
     # Set Global Variables:
@@ -26,7 +34,8 @@ def init(maxlen=512): # maximum input length of 512 tokens.
     MAX_LENGTH = maxlen
 
     # Load Configurations:
-    bert_model_name = 'bert-base-uncased'
+    #bert_model_name = 'bert-base-uncased'
+    bert_model_name = model_name
     config = BertConfig.from_pretrained(bert_model_name)
     config.output_hidden_states = True # ensures output hidden states.
 
